@@ -1,0 +1,266 @@
+<!--  -->
+<template>
+  <div class="container result">
+    <div class="result_tab">
+      <h3>{{ $route.query.q }}</h3>
+      <span>搜索出 {{ count }} 条数据</span>
+    </div>
+    <el-tabs v-model="activeName">
+      <el-tab-pane label="歌曲" name="songs">
+        <table class="el-table">
+          <thead>
+            <th></th>
+            <th>音乐标题</th>
+            <th>歌手</th>
+            <th>专辑</th>
+            <th>时长</th>
+          </thead>
+          <tbody>
+            <tr v-for="(item, index) in songList" :key="index" @dblclick="playmusic(item.id)">
+              <td>{{ index + 1 }}</td>
+              <td>
+                <div class="title">
+                  <span>{{ item.name }}</span>
+                  <!-- 如果等于1 就会显示视频按钮 -->
+                  <span v-if="item.mvid != 0" class="iconfont icon-mv"></span>
+                  <!-- 如果等于一出现二级标题 -->
+                  <p v-if="item.alias.length != 0">{{ item.alias[0] }}</p>
+                </div>
+              </td>
+              <td>{{ item.artists[0].name }}</td>
+              <td>{{ item.album.name }}</td>
+              <td>{{ item.duration }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </el-tab-pane>
+      <el-tab-pane label="歌单" name="lists">
+        <div class="song_sheet">
+          <div class="song_body">
+            <div
+              class="song_items"
+              v-for="(item, index) in playlists"
+              :key="index"
+              @click="toPlaylist(item.id)"
+            >
+              <div class="son_img">
+                <div class="son_Playback volume">
+                  <i class="fa fa-headphones" aria-hidden="true"></i>
+                  <span>{{ item.playCount }}</span>
+                </div>
+                <img :src="item.coverImgUrl" alt />
+                <span class="iconfont icon-play"></span>
+              </div>
+              <div class="son_name">{{ item.name }}</div>
+            </div>
+          </div>
+        </div>
+      </el-tab-pane>
+      <el-tab-pane label="mv" name="mv">
+        <div class="mv_video">
+          <div class="mv_video_body">
+            <div class="mv_video_item" v-for="(item, index) in mv" :key="index">
+              <div class="mv_img_video">
+                <div class="mv_video_Playback">
+                  <i class="fa fa-video-camera" aria-hidden="true"></i>
+                  <span>{{ item.playCount }}</span>
+                </div>
+                <img :src="item.cover" alt />
+                <div class="mv_video_bf">
+                  <span class="iconfont icon-play"></span>
+                </div>
+                <span class="mv_times">{{ item.duration }}</span>
+              </div>
+              <div class="mv_name">{{ item.name }}</div>
+              <div class="mv_js">{{ item.artistName }}</div>
+            </div>
+          </div>
+        </div>
+      </el-tab-pane>
+    </el-tabs>
+  </div>
+</template>
+
+<script>
+import axios from "axios";
+export default {
+  data() {
+    return {
+      activeName: "songs",
+
+      // 保存 查询歌曲
+      songList: [],
+      // 保存歌单的字段
+      playlists: [],
+      // 保存mv的字段
+      mv: [],
+      // 搜索结果的总数
+      count: 0,
+      // 总条数
+      total: 0,
+      // 页码
+      page: 1,
+    };
+  },
+  // 侦听器
+  watch: {
+    activeName() {
+      // songs 歌曲
+      // lists 歌单
+      // mv    mv
+      let type = 1;
+
+      // 获取个数
+      let limit = 20;
+      switch (this.activeName) {
+        case "songs":
+          type = 1;
+          limit = 10;
+          break;
+        case "lists":
+          type = 1000;
+          limit = 15;
+          break;
+        case "mv":
+          type = 1004;
+          limit = 12;
+          break;
+
+        default:
+          break;
+      }
+
+      axios({
+        url: "https://autumnfish.cn/search",
+        method: "get",
+        params: {
+          keywords: this.$route.query.q,
+          type, // type:type,
+          // 获取的数据量
+          limit, // limit: limit
+        },
+      }).then((res) => {
+        // 获取歌曲
+        if (type == 1) {
+          // 歌曲
+          this.songList = res.data.result.songs;
+          // 计算歌曲时间
+          for (let i = 0; i < this.songList.length; i++) {
+            let min = parseInt(this.songList[i].duration / 1000 / 60);
+            let sec = parseInt((this.songList[i].duration / 1000) % 60);
+            if (min < 10) {
+              min = "0" + min;
+            }
+            if (sec < 10) {
+              sec = "0" + sec;
+            }
+            // console.log(min + '|' + sec)
+            this.songList[i].duration = min + ":" + sec;
+          }
+          // 保存总数
+          this.count = res.data.result.songCount;
+        }
+        // 获取 歌单
+        else if (type == 1000) {
+          // 歌单的逻辑
+          this.playlists = res.data.result.playlists;
+          // 总数
+          this.count = res.data.result.playlistCount;
+          // 处理 播放次数
+          for (let i = 0; i < this.playlists.length; i++) {
+            if (this.playlists[i].playCount > 100000) {
+              this.playlists[i].playCount =
+                parseInt(this.playlists[i].playCount / 10000) + "万";
+            }
+          }
+        } else {
+          // 保存mv数据
+          this.mv = res.data.result.mvs;
+          // 总数
+          this.count = res.data.result.mvCount;
+          // 处理数据
+          for (let i = 0; i < this.mv.length; i++) {
+            // 时间
+            let min = parseInt(this.mv[i].duration / 1000 / 60);
+            let sec = parseInt((this.mv[i].duration / 1000) % 60);
+            if (min < 10) {
+              min = "0" + min;
+            }
+            if (sec < 10) {
+              sec = "0" + sec;
+            }
+            this.mv[i].duration = min + ":" + sec;
+
+            // 播放次数
+            if (this.mv[i].playCount > 100000) {
+              this.mv[i].playCount =
+                parseInt(this.mv[i].playCount / 10000) + "万";
+            }
+          }
+        }
+      });
+    },
+  },
+  // 生命周期钩子 回调函数
+  created() {
+    axios({
+      url: "https://autumnfish.cn/search",
+      method: "get",
+      params: {
+        //必须传
+        keywords: this.$route.query.q,
+        type: 1,
+        // 获取的数据量
+        limit: 10,
+      },
+    }).then((res) => {
+      this.songList = res.data.result.songs;
+      //时间换算
+      for (let i = 0; i < this.songList.length; i++) {
+        let min = parseInt(this.songList[i].duration / 1000 / 60);
+        let sec = parseInt((this.songList[i].duration / 1000) % 60);
+        if (min < 10) {
+          min = "0" + min;
+        }
+        if (sec < 10) {
+          sec = "0" + sec;
+        }
+        // console.log(min + '|' + sec)
+        this.songList[i].duration = min + ":" + sec;
+      }
+      // 保存总数
+      this.count = res.data.result.songCount;
+    });
+  },
+  methods: {
+    playmusic(id) {
+      axios({
+        url: "https://autumnfish.cn/song/url",
+        method: "get",
+        params: {
+          id, // id:id
+        },
+      }).then((res) => {
+        // console.log(res)
+        let url = res.data.data[0].url;
+        // console.log(this.$parent.musicUrl)
+        // 设置给父组件的 播放地址
+        this.$parent.musicUrl = url;
+      });
+    },
+    // 去歌单详情页面
+    toPlaylist(id) {
+      // 跳转并携带数据即可
+      this.$router.push(`/playlisesongs?q=${id}`);
+    }, // 页码改变事件
+  },
+};
+</script>
+
+<style scoped>
+.container {
+  margin-top: 80px;
+  width: 1140px;
+  margin-left: 480px;
+}
+</style>
